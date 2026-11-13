@@ -1,0 +1,536 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Session Wakes offline UI fixture</title>
+  <link rel="stylesheet" href="/browser/main.css" />
+  <style>
+    /* Real host theme-token fixtures. These are intentionally standalone: the
+       smoke test must not depend on the real Control UI's stylesheet. */
+    :root,
+    :root[data-theme="dark"] {
+      --bg: #0e1015;
+      --bg-accent: #13151b;
+      --bg-elevated: #191c24;
+      --text: #bcbcc0;
+      --muted: #8b8b94;
+      --border: #1e2028;
+      --accent: #ff5c5c;
+      --accent-foreground: #0e1015;
+      color-scheme: dark;
+    }
+    :root[data-theme="light"] {
+      --bg: #faf9f7;
+      --bg-accent: #f4f1ec;
+      --bg-elevated: #ffffff;
+      --text: #403c35;
+      --muted: #6e6960;
+      --border: #e8e4dc;
+      --accent: #bd4531;
+      --accent-foreground: #ffffff;
+      color-scheme: light;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      min-height: 100%;
+    }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    #mount {
+      min-height: 100vh;
+    }
+    .fixture-hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+  <main id="mount" data-fixture-root></main>
+  <div id="fixture-meta" class="fixture-hidden" aria-hidden="true">offline fixture</div>
+
+  <script type="module">
+    const nativeSetTimeout = window.setTimeout.bind(window);
+    const nativeClearTimeout = window.clearTimeout.bind(window);
+    const NOW = Date.now();
+
+    const query = new URLSearchParams(window.location.search);
+    const theme = query.get('theme') === 'light' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = theme;
+
+    function isoFromNow(offsetMs) {
+      return new Date(NOW + offsetMs).toISOString();
+    }
+    function clone(value) {
+      if (value == null) return value;
+      try { return structuredClone(value); } catch {}
+      try { return JSON.parse(JSON.stringify(value)); } catch {}
+      return String(value);
+    }
+    function serializeError(err) {
+      return {
+        name: err && err.name ? String(err.name) : 'Error',
+        message: String(err && err.message != null ? err.message : err),
+        stack: String(err && err.stack ? err.stack : ''),
+      };
+    }
+    function delay(ms) {
+      return new Promise((resolve) => nativeSetTimeout(resolve, ms));
+    }
+
+    const BASE_ROWS = [
+      {
+        key: 'agent:main:webchat:YOUR-SESSION-UUID-HERE-0001',
+        displayName: 'YOUR-SESSION-NAME-HERE-1',
+        updatedAt: NOW - 60 * 1000,
+      },
+      {
+        key: 'agent:main:webchat:YOUR-SESSION-UUID-HERE-0002',
+        displayName: 'YOUR-SESSION-NAME-HERE-2',
+        updatedAt: NOW - 5 * 60 * 1000,
+      },
+      {
+        key: 'agent:main:webchat:YOUR-SESSION-UUID-HERE-0003',
+        displayName: 'YOUR-SESSION-NAME-HERE-3',
+        updatedAt: NOW - 30 * 60 * 1000,
+      },
+      {
+        key: 'agent:main:webchat:YOUR-SESSION-UUID-HERE-0004',
+        displayName: 'YOUR-SESSION-NAME-HERE-4',
+        updatedAt: NOW - 2 * 60 * 60 * 1000,
+      },
+    ];
+
+    function baseWakes(rows) {
+      return [
+        {
+          id: 'wake-YOUR-ID-HERE-0001',
+          key: rows[0].key,
+          message: 'YOUR-PENDING-MESSAGE-HERE-1',
+          deliverAt: isoFromNow(25 * 60 * 1000),
+          status: 'pending',
+          attempts: 0,
+          createdAt: isoFromNow(-2 * 60 * 1000),
+        },
+        {
+          id: 'wake-YOUR-ID-HERE-0002',
+          key: rows[1].key,
+          message: 'YOUR-PENDING-MESSAGE-HERE-2',
+          deliverAt: isoFromNow(2 * 60 * 60 * 1000),
+          status: 'pending',
+          attempts: 0,
+          createdAt: isoFromNow(-5 * 60 * 1000),
+        },
+        {
+          id: 'wake-YOUR-ID-HERE-0003',
+          key: rows[2].key,
+          message: 'YOUR-FIRED-MESSAGE-HERE',
+          deliverAt: null,
+          status: 'fired',
+          attempts: 1,
+          firedAt: isoFromNow(-10 * 60 * 1000),
+          createdAt: isoFromNow(-20 * 60 * 1000),
+        },
+        {
+          id: 'wake-YOUR-ID-HERE-0004',
+          key: rows[3].key,
+          message: 'YOUR-FAILED-MESSAGE-HERE',
+          deliverAt: isoFromNow(-30 * 60 * 1000),
+          status: 'failed',
+          attempts: 3,
+          lastError: 'YOUR-WAKE-ERROR-HERE',
+          createdAt: isoFromNow(-45 * 60 * 1000),
+        },
+      ];
+    }
+
+    const XSS_SESSION_NAME = '<img src="x" onerror="window.__SW_XSS__=\'displayName\'">YOUR-SESSION-NAME-HERE-XSS';
+    const XSS_MESSAGE = '<img src="x" onerror="window.__SW_XSS__=\'message\'"><script>window.__SW_XSS__="script"<\/script>YOUR-MESSAGE-HERE-XSS';
+
+    let rows = BASE_ROWS.map((row) => ({ ...row }));
+    let wakes = baseWakes(rows);
+
+    if (query.get('long') === '1') {
+      const longRow = {
+        key: 'agent:main:webchat:YOUR-LONG-SESSION-UUID-HERE-' + 'x'.repeat(96),
+        displayName: 'YOUR-LONG-SESSION-NAME-HERE-' + 'LongName'.repeat(8),
+        updatedAt: NOW - 15 * 1000,
+      };
+      rows.push(longRow);
+      wakes.push({
+        id: 'wake-YOUR-LONG-ID-HERE-0005',
+        key: longRow.key,
+        message: 'YOUR-LONG-MESSAGE-HERE-' + 'm'.repeat(180),
+        deliverAt: isoFromNow(10 * 60 * 1000),
+        status: 'pending',
+        attempts: 0,
+        createdAt: isoFromNow(-1000),
+      });
+    }
+
+    if (query.get('xss') === '1') {
+      rows = [{
+        key: 'agent:main:webchat:YOUR-XSS-SESSION-UUID-HERE-0001',
+        displayName: XSS_SESSION_NAME,
+        updatedAt: NOW - 1000,
+      }];
+      wakes = [{
+        id: 'wake-YOUR-XSS-ID-HERE-0001',
+        key: rows[0].key,
+        message: XSS_MESSAGE,
+        deliverAt: isoFromNow(10 * 60 * 1000),
+        status: 'pending',
+        attempts: 0,
+        createdAt: isoFromNow(-1000),
+      }];
+    }
+
+    if (query.get('empty') === '1') {
+      wakes = [];
+    }
+
+    const state = {
+      theme,
+      connection: { connected: query.get('connected') !== '0' },
+      sessions: { rows },
+      wakes,
+      calls: {
+        total: 0,
+        list: 0,
+        listCompleted: 0,
+        listFailed: 0,
+        listInFlight: 0,
+        create: 0,
+        createCompleted: 0,
+        createFailed: 0,
+        createInFlight: 0,
+        delete: 0,
+        deleteCompleted: 0,
+        deleteFailed: 0,
+        deleteInFlight: 0,
+        other: 0,
+        registerPage: 0,
+        invalidate: 0,
+      },
+      delays: { list: 0, create: 0, delete: 0 },
+      errors: { list: 0, create: 0, delete: 0 },
+      lastListParams: null,
+      lastCreateParams: null,
+      lastDeleteParams: null,
+      lastCreatedWake: null,
+      lastListResultCount: null,
+      createdIds: [],
+      deletedIds: [],
+      unexpectedMethods: [],
+      requestLog: [],
+      mountCount: 0,
+      disposeCount: 0,
+      abortCount: 0,
+      activationDisposeCalls: 0,
+      registeredPageDisposeCalls: 0,
+      mounted: false,
+    };
+
+    const timers = {
+      pollTimers: new Set(),
+      latestPoll: null,
+    };
+
+    // Capture the plugin's self-chained 20s poll without disturbing any other
+    // timer. triggerPoll() cancels that captured timer and invokes it early.
+    window.setTimeout = function fixtureSetTimeout(fn, ms, ...args) {
+      const numericMs = Number(ms) || 0;
+      const isPoll = numericMs >= 15000 && numericMs <= 25000;
+      let id = null;
+      const wrapped = (...callbackArgs) => {
+        if (isPoll) {
+          timers.pollTimers.delete(id);
+          if (timers.latestPoll && timers.latestPoll.id === id) timers.latestPoll = null;
+        }
+        return typeof fn === 'function' ? fn(...callbackArgs) : undefined;
+      };
+      id = nativeSetTimeout(wrapped, ms, ...args);
+      if (isPoll) {
+        timers.pollTimers.add(id);
+        timers.latestPoll = { id, fn: wrapped, delay: numericMs, scheduledAt: Date.now() };
+      }
+      return id;
+    };
+    window.clearTimeout = function fixtureClearTimeout(id) {
+      if (timers.pollTimers.delete(id) && timers.latestPoll && timers.latestPoll.id === id) {
+        timers.latestPoll = null;
+      }
+      return nativeClearTimeout(id);
+    };
+
+    async function request(method, params) {
+      const p = params == null ? {} : params;
+      state.calls.total += 1;
+      state.requestLog.push({ method, params: clone(p), at: Date.now() });
+      if (state.requestLog.length > 500) state.requestLog.splice(0, 250);
+
+      if (method === 'sessionwakes.wakes.list') {
+        state.calls.list += 1;
+        state.calls.listInFlight += 1;
+        state.lastListParams = clone(p);
+        try {
+          if (state.delays.list > 0) await delay(state.delays.list);
+          if (state.errors.list > 0) {
+            state.errors.list -= 1;
+            throw new Error('YOUR-LIST-ERROR-HERE');
+          }
+          state.calls.listCompleted += 1;
+          state.lastListResultCount = state.wakes.length;
+          return { wakes: clone(state.wakes) };
+        } catch (err) {
+          state.calls.listFailed += 1;
+          throw err;
+        } finally {
+          state.calls.listInFlight -= 1;
+        }
+      }
+
+      if (method === 'sessionwakes.wakes.create') {
+        state.calls.create += 1;
+        state.calls.createInFlight += 1;
+        state.lastCreateParams = clone(p);
+        state.lastCreatedWake = null;
+        try {
+          if (state.delays.create > 0) await delay(state.delays.create);
+          if (state.errors.create > 0) {
+            state.errors.create -= 1;
+            throw new Error('YOUR-CREATE-ERROR-HERE');
+          }
+          const wake = {
+            id: 'wake-YOUR-NEW-ID-HERE-' + String(state.calls.create).padStart(4, '0'),
+            key: p.key,
+            message: p.message,
+            deliverAt: p.deliverAt == null || p.deliverAt === '' ? null : p.deliverAt,
+            status: 'pending',
+            attempts: 0,
+            createdAt: new Date().toISOString(),
+          };
+          state.wakes.push(wake);
+          state.createdIds.push(wake.id);
+          state.calls.createCompleted += 1;
+          state.lastCreatedWake = clone(wake);
+          return { wake: clone(wake) };
+        } catch (err) {
+          state.calls.createFailed += 1;
+          throw err;
+        } finally {
+          state.calls.createInFlight -= 1;
+        }
+      }
+
+      if (method === 'sessionwakes.wakes.delete') {
+        state.calls.delete += 1;
+        state.calls.deleteInFlight += 1;
+        state.lastDeleteParams = clone(p);
+        try {
+          if (state.delays.delete > 0) await delay(state.delays.delete);
+          if (state.errors.delete > 0) {
+            state.errors.delete -= 1;
+            throw new Error('YOUR-DELETE-ERROR-HERE');
+          }
+          const id = String(p && p.id != null ? p.id : '');
+          const before = state.wakes.length;
+          state.wakes = state.wakes.filter((wake) => wake.id !== id);
+          const removed = state.wakes.length !== before;
+          if (removed) state.deletedIds.push(id);
+          state.calls.deleteCompleted += 1;
+          return { removed };
+        } catch (err) {
+          state.calls.deleteFailed += 1;
+          throw err;
+        } finally {
+          state.calls.deleteInFlight -= 1;
+        }
+      }
+
+      state.calls.other += 1;
+      state.unexpectedMethods.push(method);
+      throw new Error('Offline fixture received unexpected host method: ' + method);
+    }
+
+    const pages = [];
+    const actions = [];
+    state.navigationCalls = [];
+    let viewProps = query.has("targetSession") ? { sessionKey: query.get("targetSession") } : {};
+    function updateProps(props) {
+      viewProps = clone(props || {});
+      if (currentMount && currentMount.handle.update) currentMount.handle.update({ host, signal: currentMount.controller.signal, props: viewProps, presented: true });
+    }
+    const host = {
+      navigation: {
+        openPage(target, options) {
+          state.navigationCalls.push({ target: clone(target), options: clone(options || {}) });
+          updateProps(target.params || {});
+        },
+      },
+      sessions: state.sessions,
+      connection: state.connection,
+      ui: {
+        registerAction(action) {
+          actions.push(action);
+          return () => { const i = actions.indexOf(action); if (i >= 0) actions.splice(i, 1); };
+        },
+        registerPage(page) {
+          pages.push(page);
+          state.calls.registerPage += 1;
+          return () => { state.registeredPageDisposeCalls += 1; };
+        },
+        invalidate() {
+          state.calls.invalidate += 1;
+        },
+      },
+      request,
+    };
+
+    let currentMount = null;
+    let activationDispose = null;
+
+    function mount(props = viewProps) {
+      viewProps = clone(props || {});
+      const page = pages.find((candidate) => candidate && candidate.id === 'session-wakes') || pages[0];
+      if (!page) throw new Error('Plugin did not register a page through host.ui.registerPage()');
+      if (currentMount) dispose();
+      const container = document.getElementById('mount');
+      container.textContent = '';
+      const controller = new AbortController();
+      state.mountCount += 1;
+      let handle;
+      try {
+        handle = page.mount(container, { host, signal: controller.signal, props: viewProps, presented: true });
+      } catch (err) {
+        state.mountError = serializeError(err);
+        throw err;
+      }
+      if (handle && typeof handle.then === 'function') {
+        const err = new Error('page.mount(container, ctx) must be synchronous but returned a Promise');
+        state.mountError = serializeError(err);
+        throw err;
+      }
+      if (!handle || typeof handle.dispose !== 'function') {
+        const err = new Error('page.mount(container, ctx) must return a { dispose() } handle');
+        state.mountError = serializeError(err);
+        throw err;
+      }
+      currentMount = { container, controller, handle, page };
+      state.mounted = true;
+      return { mounted: true, mountCount: state.mountCount, pageId: page.id };
+    }
+
+    function dispose() {
+      if (!currentMount) return false;
+      const current = currentMount;
+      currentMount = null;
+      state.disposeCount += 1;
+      try {
+        current.handle.dispose();
+      } catch (err) {
+        state.disposeError = serializeError(err);
+      }
+      try {
+        if (!current.controller.signal.aborted) current.controller.abort();
+        state.abortCount += 1;
+      } catch (err) {
+        state.abortError = serializeError(err);
+      }
+      state.mounted = false;
+      return true;
+    }
+
+    function triggerPoll() {
+      const entry = timers.latestPoll;
+      if (!entry) return Promise.resolve(false);
+      timers.latestPoll = null;
+      timers.pollTimers.delete(entry.id);
+      nativeClearTimeout(entry.id);
+      try {
+        return Promise.resolve(entry.fn()).then(() => true);
+      } catch (err) {
+        return Promise.reject(err);
+      }
+    }
+
+    const testHost = {
+      ready: false,
+      fatal: null,
+      mountError: null,
+      state,
+      host,
+      pages,
+      actions,
+      updateProps,
+      page: null,
+      plugin: null,
+      activationDispose: null,
+      mount,
+      dispose,
+      triggerPoll,
+      getPollTimerCount: () => timers.pollTimers.size,
+      getLatestPoll: () => (timers.latestPoll ? { ...timers.latestPoll, fn: undefined } : null),
+      setTheme(nextTheme) {
+        const value = nextTheme === 'light' ? 'light' : 'dark';
+        document.documentElement.dataset.theme = value;
+        state.theme = value;
+        return value;
+      },
+      setConnection(connected) {
+        state.connection.connected = !!connected;
+        return state.connection.connected;
+      },
+      disposePlugin() {
+        if (typeof activationDispose === 'function') {
+          activationDispose();
+          state.activationDisposeCalls += 1;
+        }
+      },
+    };
+
+    window.testHost = testHost;
+    window.fixture = {
+      get state() { return state; },
+      host,
+      pages,
+      mount,
+      dispose,
+      triggerPoll,
+    };
+
+    (async () => {
+      try {
+        const module = await import('/browser/main.js');
+        const plugin = module.default;
+        testHost.plugin = plugin || null;
+        if (!plugin || typeof plugin.activate !== 'function') {
+          throw new Error('browser/main.js default export must expose activate(host)');
+        }
+        activationDispose = plugin.activate(host);
+        testHost.activationDispose = activationDispose;
+        testHost.page = pages.find((candidate) => candidate && candidate.id === 'session-wakes') || pages[0] || null;
+        if (!testHost.page) {
+          throw new Error('plugin.activate(host) did not call host.ui.registerPage()');
+        }
+        if (query.get('manual') !== '1') {
+          try {
+            mount();
+          } catch (err) {
+            testHost.mountError = serializeError(err);
+          }
+        }
+      } catch (err) {
+        testHost.fatal = serializeError(err);
+      } finally {
+        testHost.ready = true;
+      }
+    })();
+  </script>
+</body>
+</html>

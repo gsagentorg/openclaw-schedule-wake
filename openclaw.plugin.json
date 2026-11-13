@@ -1,0 +1,37 @@
+{
+  "id": "session-wakes",
+  "name": "Session Wakes",
+  "description": "Schedule deferred zero-token wake injections into sessions; Wakes tab in Control UI.",
+  "uiCapabilities": [
+    "page",
+    "navigation",
+    "action"
+  ],
+  "categories": [
+    "productivity"
+  ],
+  "enabledByDefault": false,
+  "activation": {
+    "onStartup": true
+  },
+  "dashboard": {
+    "dataBindings": [
+      {
+        "id": "wakes.list",
+        "method": "sessionwakes.wakes.list",
+        "description": "List queued wakes."
+      }
+    ]
+  },
+  "controlUi": {
+    "entry": "dist/control-ui/v1/index.js",
+    "styles": [
+      "dist/control-ui/v1/index.css"
+    ]
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}

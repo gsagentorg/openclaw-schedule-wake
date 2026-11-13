@@ -1,0 +1,13 @@
+lab/frpc.env
+lab/*.domain
+node_modules/
+/lab/
+/research/
+/dist/
+/e2e/cases.md
+/e2e/checklist.md
+/e2e/README.md
+*.tgz
+*.log
+.env
+.env.*

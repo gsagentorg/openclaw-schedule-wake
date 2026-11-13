@@ -1,0 +1,37 @@
+{
+  "name": "openclaw-plugin-session-wakes",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "ui:build": "node scripts/build.mjs",
+    "test": "node --test test/backend.test.mjs",
+    "ui:test": "node e2e/ui-smoke.mjs",
+    "prepare": "node scripts/build.mjs",
+    "prepack": "node scripts/build.mjs"
+  },
+  "openclaw": {
+    "extensions": [
+      "./dist/index.js"
+    ],
+    "compat": {
+      "pluginApi": ">=2026.5.17"
+    }
+  },
+  "description": "Schedule deferred session messages with a native OpenClaw Control UI.",
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gsmainagent/openclaw-schedule-wake.git"
+  },
+  "files": [
+    "dist/",
+    "openclaw.plugin.json",
+    "README.md",
+    "index.js",
+    "browser/main.js",
+    "browser/main.css",
+    "scripts/build.mjs"
+  ]
+}
