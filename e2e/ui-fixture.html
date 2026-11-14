@@ -401,6 +401,7 @@
       if (!page) throw new Error('Plugin did not register a page through host.ui.registerPage()');
       if (currentMount) dispose();
       const container = document.getElementById('mount');
+      container.style.display = 'contents'; // Real host mount contract: plugin must own its layout wrapper.
       container.textContent = '';
       const controller = new AbortController();
       state.mountCount += 1;

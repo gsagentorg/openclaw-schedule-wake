@@ -1476,6 +1476,29 @@ registerTest('unlisted targets, invalid props and action disposal are safe', asy
   })
 ));
 
+registerTest('host display-contents mount preserves real vertical section spacing', async (suite) => (
+  withPage(suite, 'host-layout-spacing', {}, async ({ page }) => {
+    for (const width of [1280, 390]) {
+      await page.setViewportSize({ width, height: 900 });
+      const report = await page.evaluate(() => {
+        const mount = document.querySelector('#mount');
+        const root = mount.querySelector('.sw-root');
+        const header = root.querySelector('.sw-header').getBoundingClientRect();
+        const metrics = root.querySelector('.sw-metrics').getBoundingClientRect();
+        const layout = root.querySelector('.sw-layout').getBoundingClientRect();
+        return { hostDisplay: getComputedStyle(mount).display, rootDisplay: getComputedStyle(root).display,
+          separateRoot: root !== mount, headerGap: metrics.top - header.bottom,
+          panelGap: layout.top - metrics.bottom, padding: parseFloat(getComputedStyle(root).paddingTop) };
+      });
+      checkEqual(report.hostDisplay, 'contents', 'Fixture must reproduce the real host mount');
+      check(report.separateRoot && report.rootDisplay === 'grid', 'Layout must be plugin-owned', report);
+      check(report.headerGap >= 16 && report.panelGap >= 16, 'Sections must not touch', report);
+      check(report.padding >= 16, 'Page padding must survive host mount style', report);
+    }
+    return { desktopAndMobile: true, hostInlineDisplayContents: true };
+  })
+));
+
 async function runSuite() {
   await mkdir(artifactDir, { recursive: true });
   const startedAt = new Date();

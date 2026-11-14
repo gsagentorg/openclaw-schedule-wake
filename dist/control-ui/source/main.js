@@ -208,7 +208,12 @@ export default defineControlUiPlugin({
     const page = {
       id: "session-wakes",
       label: "Wakes",
-      mount(container, ctx) {
+      mount(mountContainer, ctx) {
+        // The host owns the mount element and may set display: contents inline.
+        // Keep layout, padding and gaps on a plugin-owned element instead.
+        mountContainer.textContent = "";
+        const container = el("div");
+        mountContainer.appendChild(container);
         mountSeq += 1;
         const uid = "sw-" + mountSeq;
         const ids = {
@@ -1357,6 +1362,7 @@ export default defineControlUiPlugin({
               if (container.dataset.swMount === uid) {
                 container.classList.remove("sw-root");
                 delete container.dataset.swMount;
+                container.remove();
               }
             } catch {
               // ignore

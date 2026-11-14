@@ -1057,8 +1057,8 @@
 
 @media (max-width: 560px) {
   .sw-root {
-    gap: 14px;
-    padding: 14px;
+    gap: 18px;
+    padding: 16px;
   }
 
   .sw-root .sw-panel {
