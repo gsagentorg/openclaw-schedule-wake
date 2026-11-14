@@ -27,8 +27,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(scriptDir, '..');
 const fixtureFile = path.join(scriptDir, 'ui-fixture.html');
-const mainJsFile = path.join(projectRoot, 'browser', 'main.js');
-const mainCssFile = path.join(projectRoot, 'browser', 'main.css');
+const mainJsFile = path.join(projectRoot, 'dist', 'control-ui', 'source', 'main.js');
+const mainCssFile = path.join(projectRoot, 'dist', 'control-ui', 'source', 'main.css');
 
 const playwrightModuleEnv = process.env.PLAYWRIGHT_MODULE_PATH;
 const chromeBinEnv = process.env.CHROME_BIN;

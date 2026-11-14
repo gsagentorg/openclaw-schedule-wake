@@ -24,9 +24,9 @@
     ]
   },
   "controlUi": {
-    "entry": "dist/control-ui/v1/index.js",
+    "entry": "dist/control-ui/source/main.js",
     "styles": [
-      "dist/control-ui/v1/index.css"
+      "dist/control-ui/source/main.css"
     ]
   },
   "configSchema": {

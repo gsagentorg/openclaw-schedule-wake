@@ -16,17 +16,13 @@ Plugin ID: `session-wakes`. Native UI: **Session Wakes**.
 
 Use a compatible OpenClaw host with native custom-plugin UI support:
 
-This repository contains source, not committed build outputs. OpenClaw's Git installer validates extension entries before running a build and installs dependencies with lifecycle scripts disabled. Therefore direct `git:` installation of this source-only repository is not supported. Build an archive first:
+This zero-dependency plugin installs directly from Git; no build or lifecycle scripts are required:
 
 ```sh
-git clone https://github.com/gsmainagent/openclaw-schedule-wake.git
-cd openclaw-schedule-wake
-npm run build
-npm pack
-openclaw plugins install ./openclaw-plugin-session-wakes-0.1.0.tgz --accept-capabilities
+openclaw plugins install 'git:github.com/gsmainagent/openclaw-schedule-wake@main' --accept-capabilities
 ```
 
-For a pinned installation, clone the desired source revision, verify its commit, then build and install its archive. Do not rely on `prepare` being executed by the OpenClaw Git installer. npm's `git+https:` locator is also not accepted by OpenClaw's npm-source parser.
+The backend entry is the authored root index.js. The only authoritative browser sources live in dist/control-ui/source/ because the native UI contract requires a dedicated dist subdirectory. Those are plain hand-authored JavaScript/CSS, not generated duplicates or bundled artifacts. The build command only checks syntax. Pin a full commit instead of main when reproducibility is required.
 
 Review the plugin before accepting its `page`, `navigation`, and `action` UI capabilities. Native UI requires the host's Custom plugin UI setting and an authenticated HTTPS or trusted-loopback Control UI. Installation support depends on the host's installer; this repository is not an official-catalog or ClawHub package.
 
@@ -49,7 +45,7 @@ PLAYWRIGHT_MODULE_PATH=/YOUR-PLAYWRIGHT-ENTRY-HERE CHROME_BIN=/YOUR-CHROME-BINAR
 
 Supply an installed `playwright-core` module and a compatible Chrome executable. Put artifacts outside this source directory. The tests exercise computed styles, dark/light and narrow layouts, queue interactions, navigation targeting and disposal. They are not proof of real-host menu interaction.
 
-`npm pack` builds an allowlisted archive. It excludes lab configuration, credentials, real test records, local state, dependencies and screenshots. Generated `dist/` files are not committed; build them from source or use the package lifecycle.
+`npm pack` builds an allowlisted archive. It excludes lab configuration, credentials, real test records, local state, dependencies and screenshots. Only the authored UI source files are tracked under dist/control-ui/source/; other generated outputs are ignored.
 
 ## Runtime and permissions
 

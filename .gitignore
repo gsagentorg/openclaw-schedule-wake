@@ -3,7 +3,10 @@ lab/*.domain
 node_modules/
 /lab/
 /research/
-/dist/
+/dist/*
+!/dist/control-ui/
+/dist/control-ui/*
+!/dist/control-ui/source/
 /e2e/cases.md
 /e2e/checklist.md
 /e2e/README.md

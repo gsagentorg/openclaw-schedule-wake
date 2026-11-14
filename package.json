@@ -7,13 +7,11 @@
     "build": "node scripts/build.mjs",
     "ui:build": "node scripts/build.mjs",
     "test": "node --test test/backend.test.mjs",
-    "ui:test": "node e2e/ui-smoke.mjs",
-    "prepare": "node scripts/build.mjs",
-    "prepack": "node scripts/build.mjs"
+    "ui:test": "node e2e/ui-smoke.mjs"
   },
   "openclaw": {
     "extensions": [
-      "./dist/index.js"
+      "./index.js"
     ],
     "compat": {
       "pluginApi": ">=2026.5.17"
@@ -26,12 +24,10 @@
     "url": "git+https://github.com/gsmainagent/openclaw-schedule-wake.git"
   },
   "files": [
-    "dist/",
+    "index.js",
+    "dist/control-ui/source/",
     "openclaw.plugin.json",
     "README.md",
-    "index.js",
-    "browser/main.js",
-    "browser/main.css",
     "scripts/build.mjs"
   ]
 }
