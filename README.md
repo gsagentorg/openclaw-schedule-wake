@@ -16,11 +16,17 @@ Plugin ID: `session-wakes`. Native UI: **Session Wakes**.
 
 Use a compatible OpenClaw host with native custom-plugin UI support:
 
+This repository contains source, not committed build outputs. OpenClaw's Git installer validates extension entries before running a build and installs dependencies with lifecycle scripts disabled. Therefore direct `git:` installation of this source-only repository is not supported. Build an archive first:
+
 ```sh
-openclaw plugins install 'git:github.com/gsmainagent/openclaw-schedule-wake@main' --accept-capabilities
+git clone https://github.com/gsmainagent/openclaw-schedule-wake.git
+cd openclaw-schedule-wake
+npm run build
+npm pack
+openclaw plugins install ./openclaw-plugin-session-wakes-0.1.0.tgz --accept-capabilities
 ```
 
-OpenClaw uses its own `git:` source locator; do not pass npm's `git+https:` locator to this command. Pin a release by replacing `main` with its full commit hash.
+For a pinned installation, clone the desired source revision, verify its commit, then build and install its archive. Do not rely on `prepare` being executed by the OpenClaw Git installer. npm's `git+https:` locator is also not accepted by OpenClaw's npm-source parser.
 
 Review the plugin before accepting its `page`, `navigation`, and `action` UI capabilities. Native UI requires the host's Custom plugin UI setting and an authenticated HTTPS or trusted-loopback Control UI. Installation support depends on the host's installer; this repository is not an official-catalog or ClawHub package.
 
