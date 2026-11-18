@@ -400,10 +400,10 @@ export default defineControlUiPlugin({
         presets.setAttribute("role", "group");
         presets.setAttribute("aria-label", "快捷时间");
         const presetDefs = [
-          ["现在", 0],
-          ["+5 分钟", 5 * 60 * 1000],
           ["+30 分钟", 30 * 60 * 1000],
           ["+1 小时", 60 * 60 * 1000],
+          ["+2 小时", 2 * 60 * 60 * 1000],
+          ["+5 小时", 5 * 60 * 60 * 1000],
         ];
         for (const [label, offset] of presetDefs) {
           const button = el("button", "sw-preset", label);
