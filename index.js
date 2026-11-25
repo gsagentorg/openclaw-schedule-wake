@@ -8,6 +8,7 @@ const STATE_FILE = process.env.OPENCLAW_WAKES_FILE
   || path.join(os.homedir(), ".openclaw", "session-wakes", "wakes.json");
 const TICK_MS = 10000;
 const MAX_ATTEMPTS = 3;
+const WAIT_TIMEOUT_MS = Number(process.env.SESSION_WAKES_WAIT_MS || 120000);
 
 function loadWakes() {
   try {
@@ -39,24 +40,46 @@ function resolveOpenclawEntry(api) {
   } catch {}
   return null;
 }
-function injectWake(nodeBin, entry, wake) {
+function callGateway(nodeBin, entry, method, params) {
   return new Promise((resolve) => {
-    const params = JSON.stringify({ key: wake.key, message: wake.message });
-    const child = spawn(nodeBin, [entry, "gateway", "call", "sessions.send", "--params", params], {
+    const child = spawn(nodeBin, [entry, "gateway", "call", method, "--params", JSON.stringify(params)], {
       stdio: ["ignore", "pipe", "pipe"],
     });
     let out = "";
     child.stdout.on("data", (d) => { out += String(d); });
     child.stderr.on("data", (d) => { out += String(d); });
-    child.on("error", (err) => resolve({ ok: false, detail: String(err) }));
+    child.on("error", (err) => resolve({ code: -1, parsed: null, out: String(err) }));
     child.on("close", (code) => {
       let parsed = null;
       const s = out.indexOf("{"); const e = out.lastIndexOf("}");
       if (s >= 0 && e > s) { try { parsed = JSON.parse(out.slice(s, e + 1)); } catch {} }
-      const ok = code === 0 && parsed && (parsed.status === "started" || parsed.status === "accepted" || parsed.runId);
-      resolve({ ok: ok, detail: out.slice(0, 400) });
+      resolve({ code: code, parsed: parsed, out: out });
     });
   });
+}
+async function injectWake(nodeBin, entry, wake) {
+  const r = await callGateway(nodeBin, entry, "sessions.send", {
+    key: wake.key,
+    message: wake.message,
+    // Stable per-wake key: a transport retry after an ambiguous response is
+    // deduplicated by the gateway instead of running the turn twice.
+    idempotencyKey: wake.id,
+  });
+  const parsed = r.parsed;
+  const runId = parsed && typeof parsed.runId === "string" ? parsed.runId : undefined;
+  const ok = r.code === 0 && parsed && (parsed.status === "started" || parsed.status === "accepted" || runId);
+  return { ok: ok, runId: runId, detail: String(r.out).slice(0, 400) };
+}
+// Success means "the wake turn did not come back as an error". A timeout is
+// not evidence of failure, so it stays a delivery success and is never re-sent.
+async function waitForWake(nodeBin, entry, runId) {
+  const r = await callGateway(nodeBin, entry, "agent.wait", { runId: runId, timeoutMs: WAIT_TIMEOUT_MS });
+  const parsed = r.parsed;
+  if (!parsed) return { failed: false, detail: String(r.out).slice(0, 400) };
+  if (parsed.status === "error") {
+    return { failed: true, detail: String(parsed.error || r.out).slice(0, 400) };
+  }
+  return { failed: false, detail: "" };
 }
 
 export default definePluginEntry({
@@ -66,6 +89,7 @@ export default definePluginEntry({
   register(api) {
     let cachedEntry;
     let entryProbed = false;
+    const inflight = new Set();
     function getEntry() {
       if (!entryProbed) {
         cachedEntry = resolveOpenclawEntry(api);
@@ -122,13 +146,35 @@ export default definePluginEntry({
       const latest = loadWakes();
       const current = latest.find((item) => item.id === wake.id);
       if (!current) return; // Deletion during delivery must not resurrect a wake.
-      for (const key of ["status", "attempts", "lastError", "firedAt"]) {
+      for (const key of ["status", "attempts", "lastError", "firedAt", "runId", "retryable", "waitedAt"]) {
         if (Object.hasOwn(wake, key)) current[key] = wake[key];
       }
       saveWakes(latest); // Preserve wakes created while the CLI request was in flight.
     }
+    function markRunFailed(wake, runId, detail) {
+      const latest = loadWakes();
+      const current = latest.find((item) => item.id === wake.id);
+      // Only a still-delivered wake may be downgraded; never resurrect a
+      // deleted wake and never overwrite a newer delivery of the same wake.
+      if (!current || current.status !== "fired" || current.runId !== runId) return;
+      current.status = "failed";
+      current.retryable = false;
+      current.lastError = "wake turn failed: " + (detail || "error");
+      current.waitedAt = new Date().toISOString();
+      saveWakes(latest);
+    }
+    function watchRun(wake, runId, entry) {
+      const task = (async () => {
+        const result = await waitForWake(process.execPath, entry, runId);
+        if (stopped || !result.failed) return;
+        markRunFailed(wake, runId, result.detail);
+      })().catch(() => {}).finally(() => inflight.delete(task));
+      inflight.add(task);
+    }
     api.registerService({
       id: "session-wakes-injector",
+      // Test seam only: lets the suite await asynchronous run verification.
+      whenIdle: () => Promise.allSettled([...inflight]),
       start(ctx) {
         stopInjector();
         stopped = false;
@@ -148,12 +194,21 @@ export default definePluginEntry({
               if ((w.attempts || 0) >= MAX_ATTEMPTS) { w.status = "failed"; w.lastError = w.lastError || "max attempts reached"; persistWakeResult(w); continue; }
               const res = await injectWake(process.execPath, entry, w);
               w.attempts = (w.attempts || 0) + 1;
-              if (res.ok) { w.status = "fired"; w.firedAt = new Date().toISOString(); w.lastError = ""; }
+              if (res.ok) {
+                w.status = "fired";
+                w.firedAt = new Date().toISOString();
+                w.lastError = "";
+                w.retryable = false;
+                if (res.runId) { w.runId = res.runId; }
+              }
               else {
                 w.lastError = res.detail;
                 if (w.attempts >= MAX_ATTEMPTS) w.status = "failed";
               }
               persistWakeResult(w);
+              // An accepted send is never retried: re-injecting would run the
+              // turn twice. Only the outcome of the first turn may fail it.
+              if (res.ok && res.runId) watchRun(w, res.runId, entry);
             }
           } catch (e) {
             try { ctx.logger.warn("session-wakes tick failed: " + String(e)); } catch {}
