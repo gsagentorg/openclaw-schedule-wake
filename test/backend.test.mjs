@@ -100,3 +100,34 @@ test("failed fake CLI replies retry at most three times", () => harness(async h 
   for (let i = 1; i <= 3; i++) { await h.tick(); assert.equal(h.read()[0].attempts, i); }
   assert.equal(h.read()[0].status, "failed"); await h.tick(); assert.equal(h.read()[0].attempts, 3);
 }));
+
+test("turn error right after delivery marks a non-retryable failure", () => harness(async h => {
+  writeFileSync(h.cli, [
+    'const method = process.argv[4];',
+    'if (method === "agent.wait") { console.log(JSON.stringify({ status: "error", error: "provider down" })); process.exit(0); }',
+    'console.log(JSON.stringify({ status: "started", runId: "YOUR-RUN-ID-HERE" }));'
+  ].join("\n"));
+  await h.create(); h.start(); await h.tick(); await h.service.whenIdle();
+  const result = h.read()[0];
+  assert.equal(result.status, "failed");
+  assert.equal(result.retryable, false);
+  assert.match(result.lastError, /provider down/);
+  await h.tick(); assert.equal(h.read()[0].attempts, 1, "accepted send must never be re-injected");
+}));
+
+test("completed or timed-out turn stays delivered", () => harness(async h => {
+  for (const wait of [{ status: "ok" }, { status: "timeout" }, { status: "pending" }]) {
+    const script = [
+      'const method = process.argv[4];',
+      'if (method === "agent.wait") { console.log(JSON.stringify(' + JSON.stringify(wait) + ')); process.exit(0); }',
+      'console.log(JSON.stringify({ status: "started", runId: "YOUR-RUN-ID-HERE" }));'
+    ].join("\n");
+    writeFileSync(h.cli, script);
+    await h.create(); h.start(); await h.tick(); await h.service.whenIdle();
+    const result = h.read().find(w => w.status !== "pending");
+    assert.equal(result.status, "fired");
+    assert.equal(result.lastError, "");
+    assert.equal(result.runId, "YOUR-RUN-ID-HERE");
+    h.service.stop();
+  }
+}));

@@ -52,7 +52,9 @@ Supply an installed `playwright-core` module and a compatible Chrome executable.
 - Backend methods: `sessionwakes.wakes.list` (`operator.read`), `sessionwakes.wakes.create` and `.delete` (`operator.write`).
 - State defaults to the current user's OpenClaw state directory under `session-wakes/wakes.json`. Override `OPENCLAW_WAKES_FILE` to choose a separate state file.
 - The injector resolves the installed OpenClaw CLI; `OPENCLAW_DIST_INDEX` can override its entry module. Do not point it at an untrusted program.
-- Checks run every 10 seconds, with at most three delivery attempts. Past timestamps become due on the next check; timing is not exact to the second.
+- Checks run every 10 seconds. Past timestamps become due on the next check; timing is not exact to the second.
+- Only an unaccepted send is retried, at most three times. Once the gateway accepts a wake, its turn is never re-injected; the stable `idempotencyKey` also protects transport retries from running the turn twice.
+- After acceptance the plugin waits (`SESSION_WAKES_WAIT_MS`, default 120000 ms) for the turn outcome. A turn that ends in `error` moves the wake to `failed` with `retryable: false`; `ok`, `timeout`, and `pending` all stay `fired`. Errors that happen later, outside the wake turn, do not affect the record.
 - Failed or ambiguous CLI replies may be retried. Delivery is not guaranteed exactly-once; do not use this plugin for irreversible commands.
 - Deleting a record cannot retract a message whose delivery is already in flight. Malformed state is surfaced rather than overwritten with an empty queue.
 - The service clears its timer on stop/abort. Runtime state stays outside the plugin package and must not be checked into Git.
